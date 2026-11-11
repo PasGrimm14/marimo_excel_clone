@@ -72,10 +72,8 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ## 1. Historiendaten des Vorjahres
-    """)
-    return
+    ueberschrift_historie = mo.md("## 1. Historiendaten des Vorjahres")
+    return (ueberschrift_historie,)
 
 
 @app.cell
@@ -109,21 +107,17 @@ def _(f, historie_upload):
 
 @app.cell
 def _(historie, historie_quelle, mo):
-    mo.callout(
-        mo.md(
-            f"{historie_quelle} Verfügbare Vorjahrestage: **{len(historie)}**."
-        ),
+    historie_hinweis = mo.callout(
+        mo.md(f"{historie_quelle} Verfügbare Vorjahrestage: **{len(historie)}**."),
         kind="info",
     )
-    return
+    return (historie_hinweis,)
 
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ## 2. Bestellmengen der aktuellen Woche
-    """)
-    return
+    ueberschrift_bestellung = mo.md("## 2. Bestellmengen der aktuellen Woche")
+    return (ueberschrift_bestellung,)
 
 
 @app.cell
@@ -192,10 +186,8 @@ def _(get_tabellen_reset, set_tabellen_reset, zuruecksetzen_knopf):
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ## 3. Parameter
-    """)
-    return
+    ueberschrift_parameter = mo.md("## 3. Parameter")
+    return (ueberschrift_parameter,)
 
 
 @app.cell
@@ -208,9 +200,11 @@ def _(mo):
         show_value=True,
         label="Gewichtung der Historie (0 % = nur Bestellmenge, 100 % = volle Vorjahres-Abweichung)",
     )
+    gewichtung_slider
     zuschlag_eingabe = mo.ui.number(
         start=-20, stop=50, step=1, value=5, label="Sicherheitszuschlag (%)"
     )
+    zuschlag_eingabe
     rundung_dropdown = mo.ui.dropdown(
         options={
             "Keine Rundung": 0,
@@ -227,10 +221,8 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md("""
-    ## 4. Formel auswählen
-    """)
-    return
+    ueberschrift_formel = mo.md("## 4. Formel auswählen")
+    return (ueberschrift_formel,)
 
 
 @app.cell
@@ -312,24 +304,40 @@ def _(
 def _(
     berechnen_knopf,
     bereich_formelauswahl,
+    bestellung_upload,
     gewichtung_slider,
+    historie_hinweis,
+    historie_upload,
+    jahr_eingabe,
     kalenderwoche_dropdown,
     mo,
     rundung_dropdown,
     tabelle,
+    ueberschrift_bestellung,
+    ueberschrift_formel,
+    ueberschrift_historie,
+    ueberschrift_parameter,
     zuruecksetzen_knopf,
     zuschlag_eingabe,
 ):
     bereich_eingabe = mo.vstack(
         [
-            kalenderwoche_dropdown,
+            ueberschrift_historie,
+            historie_upload,
+            historie_hinweis,
+            mo.md("---"),
+            ueberschrift_bestellung,
+            mo.hstack([jahr_eingabe, kalenderwoche_dropdown], justify="start"),
+            bestellung_upload,
             tabelle,
             mo.hstack([berechnen_knopf, zuruecksetzen_knopf], justify="start"),
             mo.md("---"),
+            ueberschrift_parameter,
             gewichtung_slider,
             zuschlag_eingabe,
             rundung_dropdown,
             mo.md("---"),
+            ueberschrift_formel,
             bereich_formelauswahl,
         ]
     )
@@ -351,113 +359,113 @@ def _(
     tabelle,
     zuschlag_eingabe,
 ):
-    mo.stop(
-        not berechnen_knopf.value,
-        mo.callout(mo.md("Bitte Bestellmengen eintragen und auf **Berechnen** klicken."), kind="neutral"),
-    )
-
-    _zeilen, _fehler = f.validiere_eingabetabelle(tabelle.value)
-
-    if not _zeilen:
+    if not berechnen_knopf.value:
         berechnung_ausgabe = mo.callout(
-            mo.md("Keine gültigen Zeilen in der Eingabetabelle. Bitte Bestellmengen prüfen:\n\n"
-                  + "\n".join(f"- {m}" for m in _fehler)),
-            kind="danger",
+            mo.md("Bitte Bestellmengen eintragen und auf **Berechnen** klicken."), kind="neutral"
         )
     else:
-        _gewichtung = gewichtung_slider.value / 100
-        _zuschlag = zuschlag_eingabe.value / 100
-        _gebinde = rundung_dropdown.value
+        _zeilen, _fehler = f.validiere_eingabetabelle(tabelle.value)
 
-        ergebnisse = f.berechne_woche(_zeilen, historie, aktive_formel_text, _gewichtung, _zuschlag, _gebinde)
-        wochensumme = f.berechne_wochensumme(ergebnisse)
-
-        _tabellen_daten = pl.DataFrame([e.as_dict() for e in ergebnisse])
-        _ergebnistabelle = mo.ui.table(_tabellen_daten, show_download=False, label="Ergebnis pro Tag")
-
-        _kennzahlen = mo.hstack(
-            [
-                mo.stat(f"{wochensumme['summe_bestellung']:.0f} kg", label="Bestellmenge Woche"),
-                mo.stat(f"{wochensumme['summe_produktion']:.0f} kg", label="Geplante Produktion Woche", bordered=True),
-                mo.stat(
-                    f"{wochensumme['differenz']:+.0f} kg",
-                    label="Differenz zur Bestellmenge",
-                    caption=f"{wochensumme['differenz_prozent']:+.1f} %" if wochensumme["differenz_prozent"] is not None else "",
-                ),
-                mo.stat(
-                    f"{wochensumme['summe_ist_vj']:.0f} kg" if wochensumme["summe_ist_vj"] is not None else "n/v",
-                    label="Vorjahres-Ist Woche",
-                ),
-            ],
-            justify="start",
-        )
-
-        _alle_hinweise = [f"{e.wochentag} {e.datum}: {h}" for e in ergebnisse for h in e.hinweise]
-        if _fehler:
-            _alle_hinweise = [f"Eingabe: {m}" for m in _fehler] + _alle_hinweise
-        if _alle_hinweise:
-            _hinweise_anzeige = mo.callout(
-                mo.md("**Hinweise zur Plausibilität:**\n\n" + "\n".join(f"- {h}" for h in _alle_hinweise)),
-                kind="warn",
+        if not _zeilen:
+            berechnung_ausgabe = mo.callout(
+                mo.md("Keine gültigen Zeilen in der Eingabetabelle. Bitte Bestellmengen prüfen:\n\n"
+                      + "\n".join(f"- {m}" for m in _fehler)),
+                kind="danger",
             )
         else:
-            _hinweise_anzeige = mo.md("")
+            _gewichtung = gewichtung_slider.value / 100
+            _zuschlag = zuschlag_eingabe.value / 100
+            _gebinde = rundung_dropdown.value
 
-        _diagramm_daten = pl.concat(
-            [
-                _tabellen_daten.select(
-                    pl.col("datum"), pl.col("bestellmenge").alias("Menge"), pl.lit("Bestellmenge").alias("Kategorie")
-                ),
-                _tabellen_daten.select(
-                    pl.col("datum"),
-                    pl.col("produktionsmenge_gerundet").alias("Menge"),
-                    pl.lit("Produktionsmenge (geplant)").alias("Kategorie"),
-                ),
-                _tabellen_daten.filter(pl.col("ist_vj").is_not_null()).select(
-                    pl.col("datum"), pl.col("ist_vj").alias("Menge"), pl.lit("Vorjahr (Ist)").alias("Kategorie")
-                ),
-            ]
-        )
-        _diagramm = (
-            alt.Chart(_diagramm_daten)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X("datum:T", title="Tag"),
-                y=alt.Y("Menge:Q", title="Menge (kg)"),
-                color=alt.Color("Kategorie:N", title=""),
-                tooltip=["datum", "Kategorie", "Menge"],
+            ergebnisse = f.berechne_woche(_zeilen, historie, aktive_formel_text, _gewichtung, _zuschlag, _gebinde)
+            wochensumme = f.berechne_wochensumme(ergebnisse)
+
+            _tabellen_daten = pl.DataFrame([e.as_dict() for e in ergebnisse])
+            _ergebnistabelle = mo.ui.table(_tabellen_daten, show_download=False, label="Ergebnis pro Tag")
+
+            _kennzahlen = mo.hstack(
+                [
+                    mo.stat(f"{wochensumme['summe_bestellung']:.0f} kg", label="Bestellmenge Woche"),
+                    mo.stat(f"{wochensumme['summe_produktion']:.0f} kg", label="Geplante Produktion Woche", bordered=True),
+                    mo.stat(
+                        f"{wochensumme['differenz']:+.0f} kg",
+                        label="Differenz zur Bestellmenge",
+                        caption=f"{wochensumme['differenz_prozent']:+.1f} %" if wochensumme["differenz_prozent"] is not None else "",
+                    ),
+                    mo.stat(
+                        f"{wochensumme['summe_ist_vj']:.0f} kg" if wochensumme["summe_ist_vj"] is not None else "n/v",
+                        label="Vorjahres-Ist Woche",
+                    ),
+                ],
+                justify="start",
             )
-            .properties(title="Bestellmenge vs. geplante Produktion vs. Vorjahr", width=600, height=320)
-        )
 
-        _export_bytes = f.exportiere_ergebnis_als_excel(
-            ergebnisse,
-            wochensumme,
-            aktive_formel_name,
-            aktive_formel_text,
-            {
-                "Gewichtung Historie (%)": gewichtung_slider.value,
-                "Sicherheitszuschlag (%)": zuschlag_eingabe.value,
-                "Rundung auf (kg, 0 = keine)": rundung_dropdown.value,
-            },
-        )
-        _download = mo.download(
-            data=_export_bytes,
-            filename="produktionsplanung_woche.xlsx",
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            label="Ergebnis als Excel-Datei herunterladen",
-        )
+            _alle_hinweise = [f"{e.wochentag} {e.datum}: {h}" for e in ergebnisse for h in e.hinweise]
+            if _fehler:
+                _alle_hinweise = [f"Eingabe: {m}" for m in _fehler] + _alle_hinweise
+            if _alle_hinweise:
+                _hinweise_anzeige = mo.callout(
+                    mo.md("**Hinweise zur Plausibilität:**\n\n" + "\n".join(f"- {h}" for h in _alle_hinweise)),
+                    kind="warn",
+                )
+            else:
+                _hinweise_anzeige = mo.md("")
 
-        berechnung_ausgabe = mo.vstack(
-            [
-                mo.md("### Ergebnis"),
-                _kennzahlen,
-                _hinweise_anzeige,
-                _ergebnistabelle,
-                _diagramm,
-                _download,
-            ]
-        )
+            _diagramm_daten = pl.concat(
+                [
+                    _tabellen_daten.select(
+                        pl.col("datum"), pl.col("bestellmenge").alias("Menge"), pl.lit("Bestellmenge").alias("Kategorie")
+                    ),
+                    _tabellen_daten.select(
+                        pl.col("datum"),
+                        pl.col("produktionsmenge_gerundet").alias("Menge"),
+                        pl.lit("Produktionsmenge (geplant)").alias("Kategorie"),
+                    ),
+                    _tabellen_daten.filter(pl.col("ist_vj").is_not_null()).select(
+                        pl.col("datum"), pl.col("ist_vj").alias("Menge"), pl.lit("Vorjahr (Ist)").alias("Kategorie")
+                    ),
+                ]
+            )
+            _diagramm = (
+                alt.Chart(_diagramm_daten)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("datum:T", title="Tag"),
+                    y=alt.Y("Menge:Q", title="Menge (kg)"),
+                    color=alt.Color("Kategorie:N", title=""),
+                    tooltip=["datum", "Kategorie", "Menge"],
+                )
+                .properties(title="Bestellmenge vs. geplante Produktion vs. Vorjahr", width=600, height=320)
+            )
+
+            _export_bytes = f.exportiere_ergebnis_als_excel(
+                ergebnisse,
+                wochensumme,
+                aktive_formel_name,
+                aktive_formel_text,
+                {
+                    "Gewichtung Historie (%)": gewichtung_slider.value,
+                    "Sicherheitszuschlag (%)": zuschlag_eingabe.value,
+                    "Rundung auf (kg, 0 = keine)": rundung_dropdown.value,
+                },
+            )
+            _download = mo.download(
+                data=_export_bytes,
+                filename="produktionsplanung_woche.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                label="Ergebnis als Excel-Datei herunterladen",
+            )
+
+            berechnung_ausgabe = mo.vstack(
+                [
+                    mo.md("### Ergebnis"),
+                    _kennzahlen,
+                    _hinweise_anzeige,
+                    _ergebnistabelle,
+                    _diagramm,
+                    _download,
+                ]
+            )
     return (berechnung_ausgabe,)
 
 
@@ -698,130 +706,130 @@ def _(
     vergleich_knopf,
     zuschlag_eingabe,
 ):
-    mo.stop(
-        not vergleich_knopf.value,
-        mo.callout(mo.md("Formeln auswählen und auf **Vergleich berechnen** klicken."), kind="neutral"),
-    )
-
-    _zeilen, _fehler = f.validiere_eingabetabelle(tabelle.value)
-
-    if not _zeilen or not multiselect_formeln.value:
+    if not vergleich_knopf.value:
         vergleich_ausgabe = mo.callout(
-            mo.md(
-                "Keine gültigen Bestellmengen oder keine Formel ausgewählt. Bitte im Reiter "
-                "'Berechnung' die Bestellmengen prüfen und hier mindestens eine Formel auswählen.\n\n"
-                + "\n".join(f"- {m}" for m in _fehler)
-            ),
-            kind="danger",
+            mo.md("Formeln auswählen und auf **Vergleich berechnen** klicken."), kind="neutral"
         )
     else:
-        _gewichtung = gewichtung_slider.value / 100
-        _zuschlag = zuschlag_eingabe.value / 100
-        _gebinde = rundung_dropdown.value
+        _zeilen, _fehler = f.validiere_eingabetabelle(tabelle.value)
 
-        _ergebnisse_je_formel = f.vergleiche_formeln(
-            multiselect_formeln.value, _zeilen, historie, _gewichtung, _zuschlag, _gebinde, eigene_formeln
-        )
-
-        _basis = pl.DataFrame(
-            [
-                {
-                    "Datum": e.datum,
-                    "Wochentag": e.wochentag,
-                    "Bestellmenge": e.bestellmenge,
-                    "Vorjahr (Ist)": e.ist_vj,
-                }
-                for e in next(iter(_ergebnisse_je_formel.values()))
-            ]
-        )
-        for _name, _ergebnisse in _ergebnisse_je_formel.items():
-            _basis = _basis.with_columns(
-                pl.Series(_name, [e.produktionsmenge_gerundet for e in _ergebnisse])
-            )
-
-        _vergleichstabelle = mo.ui.table(
-            _basis, show_download=False, label="Produktionsmenge (kg) je Formel und Tag"
-        )
-
-        _zusammenfassung = []
-        for _name, _ergebnisse in _ergebnisse_je_formel.items():
-            _summe = f.berechne_wochensumme(_ergebnisse)
-            if _summe["summe_ist_vj"] is not None:
-                _abweichung_vj = _summe["summe_produktion"] - _summe["summe_ist_vj"]
-                _abweichung_vj_prozent = (
-                    _abweichung_vj / _summe["summe_ist_vj"] * 100 if _summe["summe_ist_vj"] else None
-                )
-            else:
-                _abweichung_vj = None
-                _abweichung_vj_prozent = None
-            _zusammenfassung.append(
-                {
-                    "Formel": _name,
-                    "Wochensumme Produktion (kg)": round(_summe["summe_produktion"], 1),
-                    "Differenz zur Bestellmenge (kg)": round(_summe["differenz"], 1),
-                    "Differenz zur Bestellmenge (%)": (
-                        round(_summe["differenz_prozent"], 1) if _summe["differenz_prozent"] is not None else None
-                    ),
-                    "Abweichung zum Vorjahres-Ist (kg)": (
-                        round(_abweichung_vj, 1) if _abweichung_vj is not None else None
-                    ),
-                    "Abweichung zum Vorjahres-Ist (%)": (
-                        round(_abweichung_vj_prozent, 1) if _abweichung_vj_prozent is not None else None
-                    ),
-                }
-            )
-        _zusammenfassungstabelle = mo.ui.table(
-            pl.DataFrame(_zusammenfassung), show_download=False, label="Wochensumme je Formel"
-        )
-
-        _diagramm_teile = [
-            _basis.select(
-                pl.col("Datum"), pl.col("Bestellmenge").alias("Menge"), pl.lit("Bestellmenge").alias("Kategorie")
-            )
-        ]
-        if _basis["Vorjahr (Ist)"].null_count() < len(_basis):
-            _diagramm_teile.append(
-                _basis.filter(pl.col("Vorjahr (Ist)").is_not_null()).select(
-                    pl.col("Datum"),
-                    pl.col("Vorjahr (Ist)").alias("Menge"),
-                    pl.lit("Vorjahr (Ist)").alias("Kategorie"),
-                )
-            )
-        for _name in _ergebnisse_je_formel:
-            _diagramm_teile.append(
-                _basis.select(pl.col("Datum"), pl.col(_name).alias("Menge"), pl.lit(_name).alias("Kategorie"))
-            )
-        _diagramm_daten = pl.concat(_diagramm_teile)
-        _diagramm = (
-            alt.Chart(_diagramm_daten)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X("Datum:T", title="Tag"),
-                y=alt.Y("Menge:Q", title="Menge (kg)"),
-                color=alt.Color("Kategorie:N", title=""),
-                tooltip=["Datum", "Kategorie", "Menge"],
-            )
-            .properties(title="Formelvergleich", width=600, height=320)
-        )
-
-        if _fehler:
-            _fehler_anzeige = mo.callout(
-                mo.md("**Hinweis: Folgende Zeilen der Eingabetabelle wurden ignoriert:**\n\n"
-                      + "\n".join(f"- {m}" for m in _fehler)),
-                kind="warn",
+        if not _zeilen or not multiselect_formeln.value:
+            vergleich_ausgabe = mo.callout(
+                mo.md(
+                    "Keine gültigen Bestellmengen oder keine Formel ausgewählt. Bitte im Reiter "
+                    "'Berechnung' die Bestellmengen prüfen und hier mindestens eine Formel auswählen.\n\n"
+                    + "\n".join(f"- {m}" for m in _fehler)
+                ),
+                kind="danger",
             )
         else:
-            _fehler_anzeige = mo.md("")
+            _gewichtung = gewichtung_slider.value / 100
+            _zuschlag = zuschlag_eingabe.value / 100
+            _gebinde = rundung_dropdown.value
 
-        vergleich_ausgabe = mo.vstack(
-            [
-                mo.md("### Vergleichsergebnis"),
-                _fehler_anzeige,
-                _vergleichstabelle,
-                _zusammenfassungstabelle,
-                _diagramm,
+            _ergebnisse_je_formel = f.vergleiche_formeln(
+                multiselect_formeln.value, _zeilen, historie, _gewichtung, _zuschlag, _gebinde, eigene_formeln
+            )
+
+            _basis = pl.DataFrame(
+                [
+                    {
+                        "Datum": e.datum,
+                        "Wochentag": e.wochentag,
+                        "Bestellmenge": e.bestellmenge,
+                        "Vorjahr (Ist)": e.ist_vj,
+                    }
+                    for e in next(iter(_ergebnisse_je_formel.values()))
+                ]
+            )
+            for _name, _ergebnisse in _ergebnisse_je_formel.items():
+                _basis = _basis.with_columns(
+                    pl.Series(_name, [e.produktionsmenge_gerundet for e in _ergebnisse])
+                )
+
+            _vergleichstabelle = mo.ui.table(
+                _basis, show_download=False, label="Produktionsmenge (kg) je Formel und Tag"
+            )
+
+            _zusammenfassung = []
+            for _name, _ergebnisse in _ergebnisse_je_formel.items():
+                _summe = f.berechne_wochensumme(_ergebnisse)
+                if _summe["summe_ist_vj"] is not None:
+                    _abweichung_vj = _summe["summe_produktion"] - _summe["summe_ist_vj"]
+                    _abweichung_vj_prozent = (
+                        _abweichung_vj / _summe["summe_ist_vj"] * 100 if _summe["summe_ist_vj"] else None
+                    )
+                else:
+                    _abweichung_vj = None
+                    _abweichung_vj_prozent = None
+                _zusammenfassung.append(
+                    {
+                        "Formel": _name,
+                        "Wochensumme Produktion (kg)": round(_summe["summe_produktion"], 1),
+                        "Differenz zur Bestellmenge (kg)": round(_summe["differenz"], 1),
+                        "Differenz zur Bestellmenge (%)": (
+                            round(_summe["differenz_prozent"], 1) if _summe["differenz_prozent"] is not None else None
+                        ),
+                        "Abweichung zum Vorjahres-Ist (kg)": (
+                            round(_abweichung_vj, 1) if _abweichung_vj is not None else None
+                        ),
+                        "Abweichung zum Vorjahres-Ist (%)": (
+                            round(_abweichung_vj_prozent, 1) if _abweichung_vj_prozent is not None else None
+                        ),
+                    }
+                )
+            _zusammenfassungstabelle = mo.ui.table(
+                pl.DataFrame(_zusammenfassung), show_download=False, label="Wochensumme je Formel"
+            )
+
+            _diagramm_teile = [
+                _basis.select(
+                    pl.col("Datum"), pl.col("Bestellmenge").alias("Menge"), pl.lit("Bestellmenge").alias("Kategorie")
+                )
             ]
-        )
+            if _basis["Vorjahr (Ist)"].null_count() < len(_basis):
+                _diagramm_teile.append(
+                    _basis.filter(pl.col("Vorjahr (Ist)").is_not_null()).select(
+                        pl.col("Datum"),
+                        pl.col("Vorjahr (Ist)").alias("Menge"),
+                        pl.lit("Vorjahr (Ist)").alias("Kategorie"),
+                    )
+                )
+            for _name in _ergebnisse_je_formel:
+                _diagramm_teile.append(
+                    _basis.select(pl.col("Datum"), pl.col(_name).alias("Menge"), pl.lit(_name).alias("Kategorie"))
+                )
+            _diagramm_daten = pl.concat(_diagramm_teile)
+            _diagramm = (
+                alt.Chart(_diagramm_daten)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Datum:T", title="Tag"),
+                    y=alt.Y("Menge:Q", title="Menge (kg)"),
+                    color=alt.Color("Kategorie:N", title=""),
+                    tooltip=["Datum", "Kategorie", "Menge"],
+                )
+                .properties(title="Formelvergleich", width=600, height=320)
+            )
+
+            if _fehler:
+                _fehler_anzeige = mo.callout(
+                    mo.md("**Hinweis: Folgende Zeilen der Eingabetabelle wurden ignoriert:**\n\n"
+                          + "\n".join(f"- {m}" for m in _fehler)),
+                    kind="warn",
+                )
+            else:
+                _fehler_anzeige = mo.md("")
+
+            vergleich_ausgabe = mo.vstack(
+                [
+                    mo.md("### Vergleichsergebnis"),
+                    _fehler_anzeige,
+                    _vergleichstabelle,
+                    _zusammenfassungstabelle,
+                    _diagramm,
+                ]
+            )
     return (vergleich_ausgabe,)
 
 

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Vorsichtig bei Restunsicherheit",
+    "formel": "Bestellmenge * MIN(MAX(Faktor_VJ; 0,95); 1,15) * (1 + Zuschlag)",
+    "beschreibung": "Eigene Formel auf Basis von 'Begrenzter Faktor': kappt den Vorjahresfaktor enger (0,95 bis 1,15), da unser Lager wenig Puffer für Überproduktion hat, und berücksichtigt zusätzlich den Sicherheitszuschlag."
+  },
+  {
+    "name": "Freitag und Samstag vorsichtiger",
+    "formel": "WENN(Wochentag = \"Fr\"; Bestellmenge * 1,1; WENN(Wochentag = \"Sa\"; Bestellmenge * 1,2; Bestellmenge * Faktor_VJ))",
+    "beschreibung": "Eigene Formel: An Freitagen 10 % und an Samstagen 20 % Aufschlag auf die Bestellmenge (hohe Spontan-Mehrabnahme kurz vor dem Wochenende), an den übrigen Tagen der normale Vorjahresfaktor."
+  }
+]

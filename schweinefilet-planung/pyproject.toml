@@ -1,0 +1,20 @@
+[project]
+name = "schweinefilet-planung"
+version = "0.1.0"
+description = "Marimo-Notebook zur Produktionsplanung für Schweinefilet (Pilot-Use-Case Excel-Ablösung)"
+authors = [
+    { name = "Pascal", email = "pas.grimm.23@heilbronn.dhbw.de" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "altair>=6.3.0",
+    "marimo>=0.25.2",
+    "openpyxl>=3.1.5",
+    "polars>=2.1.0",
+    "simpleeval>=1.0.8",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
